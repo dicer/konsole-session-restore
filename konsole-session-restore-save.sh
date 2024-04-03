@@ -17,21 +17,29 @@ if [[ "$XDG_SESSION_TYPE" == "wayland" || "$1" == "force" ]] ; then
 
     while IFS= read -r pid; do
         if [[ $(readlink -f /proc/$pid/exe) == "/usr/bin/konsole" ]]; then
-            SESSIONS=$(qdbus org.kde.konsole-$pid | grep /Sessions/)
-            if [[ ${SESSIONS} ]] ; then
+            WINDOWS=$(qdbus org.kde.konsole-$pid | grep /Windows/ | grep -Eo '[0-9]+')
+            if ! [[ ${WINDOWS} ]] ; then
+                continue
+            fi
+
+            for w in ${WINDOWS}; do
+                SESSIONS=$(qdbus org.kde.konsole-$pid /Windows/$w sessionList)
+                if ! [[ ${SESSIONS} ]] ; then
+                    continue
+                fi
                 for i in ${SESSIONS}; do
-                    FORMAT=$(qdbus org.kde.konsole-$pid $i tabTitleFormat 0)
-                    PROCESSID=$(qdbus org.kde.konsole-$pid $i processId)
+                    FORMAT=$(qdbus org.kde.konsole-$pid /Sessions/$i tabTitleFormat 0)
+                    PROCESSID=$(qdbus org.kde.konsole-$pid /Sessions/$i processId)
                     CWD=$(pwdx ${PROCESSID} | sed -e "s/^[0-9]*: //")
                     # Do not record command. Re-running a command automatically looks dangerous to me.
                     #if [[ $(pgrep --parent ${PROCESSID}) ]] ; then
                     #    CHILDPID=$(pgrep --parent ${PROCESSID})
                     #    COMMAND=$(ps -p ${CHILDPID} -o args=)
                     #fi 
-                    echo "workdir: ${CWD};; title: ${FORMAT};; command:${COMMAND}" >> "${SAVE_PATH}/${pid}"
+                    echo "workdir: ${CWD};; title: ${FORMAT};; command:${COMMAND}" >> "${SAVE_PATH}/${pid}_${w}"
                     COMMAND=''
                 done
-            fi
+            done
         fi
     done <<< "$pids"
 fi
